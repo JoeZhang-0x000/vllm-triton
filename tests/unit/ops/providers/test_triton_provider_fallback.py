@@ -55,7 +55,7 @@ def setup_function() -> None:
     clear_operator_providers()
 
 
-def test_triton_provider_is_registered_as_default_and_used_as_fallback() -> None:
+def test_infinicore_provider_is_registered_as_default_and_used_as_fallback() -> None:
     register_default_operator_providers()
     register_runtime_adapter("mock", FakeRuntimeAdapter())
     activate_runtime_adapter("mock")
@@ -66,11 +66,13 @@ def test_triton_provider_is_registered_as_default_and_used_as_fallback() -> None
     register_runtime_provider_override("mock", "mock-override")
 
     resolved_attention = resolve_operator("attention")
+    resolved_embedding = resolve_operator("embedding")
     resolved_linear = resolve_operator("linear")
     resolved_norm_act = resolve_operator("norm_act")
     resolved_rotary = resolve_operator("rotary")
 
     assert resolved_attention.provider_name == "mock-override"
-    assert resolved_linear.provider_name == "triton"
-    assert resolved_norm_act.provider_name == "triton"
-    assert resolved_rotary.provider_name == "triton"
+    assert resolved_embedding.provider_name == "infinicore"
+    assert resolved_linear.provider_name == "infinicore"
+    assert resolved_norm_act.provider_name == "infinicore"
+    assert resolved_rotary.provider_name == "infinicore"

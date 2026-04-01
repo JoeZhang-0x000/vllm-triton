@@ -16,9 +16,9 @@ def test_norm_act_dispatch_uses_default_triton_provider() -> None:
     silu = apply_silu_mul("x", "gate")
     qgelu = apply_quick_gelu("x")
 
-    assert rms["provider"] == "triton"
+    assert rms["provider"] == "infinicore"
     assert rms["op"] == "rms_norm"
-    assert silu["provider"] == "triton"
+    assert silu["provider"] == "infinicore"
     assert silu["op"] == "silu_mul"
-    assert qgelu["provider"] == "triton"
+    assert qgelu["provider"] == "infinicore"
     assert qgelu["op"] == "quick_gelu"

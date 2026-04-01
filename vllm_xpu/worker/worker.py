@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from vllm_xpu.infinicore import get_infinicore
 from vllm_xpu.runtime.registry import resolve_runtime_adapter
 from vllm_xpu.worker.memory import capture_runtime_memory_snapshot
 from vllm_xpu.worker.model_runner import XPUModelRunnerBridge
@@ -99,11 +100,10 @@ class XPUWorker:
 
     def init_device(self) -> Any:
         """Initialize the current device through the active runtime adapter."""
-        try:
-            import torch
-
-            self.device = torch.device(f"{self.runtime.device_type()}:{self.local_rank}")
-        except Exception:  # pragma: no cover - torch-less fallback.
+        infinicore = get_infinicore()
+        if infinicore is not None:
+            self.device = infinicore.device(self.runtime.device_type(), self.local_rank)
+        else:
             self.device = f"{self.runtime.device_type()}:{self.local_rank}"
         self.runtime.set_device(self.device)
         return self.device

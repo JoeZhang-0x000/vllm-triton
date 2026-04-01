@@ -9,6 +9,7 @@ class OperatorGroup(str, Enum):
     """Stable operator groups supported by the XPU framework."""
 
     ATTENTION = "attention"
+    EMBEDDING = "embedding"
     LINEAR = "linear"
     NORM_ACT = "norm_act"
     ROTARY = "rotary"
@@ -19,4 +20,3 @@ def normalize_operator_group(value: OperatorGroup | str) -> OperatorGroup:
     if isinstance(value, OperatorGroup):
         return value
     return OperatorGroup(value)
-

@@ -1,10 +1,11 @@
-"""Minimal XPU platform placeholder."""
+"""Minimal out-of-tree XPU platform backed by Infinicore registration hooks."""
 
 from __future__ import annotations
 
 from typing import Any
 
 from vllm_xpu.runtime.registry import resolve_runtime_adapter
+from vllm_xpu.vllm_registration import register_with_vllm
 from vllm_xpu.worker.worker import (
     DEFAULT_XPU_ATTN_BACKEND,
     DEFAULT_XPU_WORKER_CLS,
@@ -63,14 +64,19 @@ class XPUPlatform(Platform):
     def get_attn_backend_cls(
         cls,
         selected_backend: Any,
-        head_size: int,
-        dtype: Any,
-        kv_cache_dtype: str | None,
-        block_size: int,
-        use_v1: bool,
-        use_mla: bool,
+        attn_selector_config: Any,
+        num_heads: int | None = None,
     ) -> str:
-        return DEFAULT_XPU_ATTN_BACKEND
+        del attn_selector_config, num_heads
+        register_with_vllm()
+        if selected_backend is not None and hasattr(selected_backend, "get_path"):
+            return selected_backend.get_path()
+        try:
+            from vllm.v1.attention.backends.registry import AttentionBackendEnum
+
+            return AttentionBackendEnum.CUSTOM.get_path()
+        except Exception:
+            return DEFAULT_XPU_ATTN_BACKEND
 
     @classmethod
     def set_device(cls, device: Any) -> None:

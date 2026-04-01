@@ -13,6 +13,6 @@ def test_rotary_dispatch_uses_default_triton_provider() -> None:
 
     output = apply_rotary_embedding("q", "k", "cos", "sin", position_ids="p")
 
-    assert output["provider"] == "triton"
+    assert output["provider"] == "infinicore"
+    assert output["op"] == "rotary"
     assert output["position_ids"] == "p"
-

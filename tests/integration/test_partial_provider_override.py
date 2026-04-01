@@ -42,7 +42,6 @@ def test_partial_provider_override_keeps_default_fallbacks() -> None:
     rotary = apply_rotary_embedding("q", "k", "cos", "sin", runtime_name="mock")
 
     assert attention["provider"] == "mock-attention-override"
-    assert linear["provider"] == "triton"
-    assert quick_gelu["provider"] == "triton"
-    assert rotary["provider"] == "triton"
-
+    assert linear["provider"] == "infinicore"
+    assert quick_gelu["provider"] == "infinicore"
+    assert rotary["provider"] == "infinicore"

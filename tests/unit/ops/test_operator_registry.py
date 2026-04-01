@@ -71,6 +71,7 @@ def test_runtime_override_falls_back_to_default_provider_for_missing_groups() ->
             name="default",
             implementations={
                 "attention": "default-attention",
+                "embedding": "default-embedding",
                 "linear": "default-linear",
                 "norm_act": "default-norm",
                 "rotary": "default-rotary",
@@ -88,10 +89,13 @@ def test_runtime_override_falls_back_to_default_provider_for_missing_groups() ->
     register_runtime_provider_override("mock", "mock-override")
 
     resolved_attention = resolve_operator("attention")
+    resolved_embedding = resolve_operator("embedding")
     resolved_linear = resolve_operator("linear")
 
     assert resolved_attention.provider_name == "mock-override"
     assert resolved_attention.implementation == "override-attention"
+    assert resolved_embedding.provider_name == "default"
+    assert resolved_embedding.implementation == "default-embedding"
     assert resolved_linear.provider_name == "default"
     assert resolved_linear.implementation == "default-linear"
 

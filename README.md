@@ -1,12 +1,13 @@
-# vllm-xpu Foundation
+# vllm-xpu
 
-这个仓库实现一个尽量简洁的 out-of-tree `vllm_xpu` 插件基础框架。
+这个仓库实现一个 out-of-tree `vllm_xpu` 插件，当前第一阶段默认以 `Infinicore` 作为执行基座，目标是在非 PyTorch-native XPU 上跑通 `qwen3 dense` 架构路径的最小文本生成闭环。
 
-目标不是立刻支持所有设备，而是先把一条最小、稳定、可扩展的路径搭起来：
+第一阶段刻意收敛到一条很窄、但真实可跑的路径：
 
 - 用户只安装 `vllm-cpu`
 - Python 里先 `import vllm_xpu`
-- 后续再通过 runtime adapter 与 operator provider 接入 GPU / 类 GPU 设备
+- 默认执行路径走 `Infinicore`
+- 验收目标是 plain text、non-streaming、single-prompt 生成
 
 ## 当前状态
 
@@ -17,14 +18,15 @@
 - runtime adapter registry
 - operator provider registry
 - 最小 `XPUPlatform` / `XPUWorker` 桥接层
-- 默认 Triton provider
+- 默认 `Infinicore` provider
 - layer / attention 分发封装
+- `basic.py` 风格的最小本地示例入口
 
 当前还没有完成：
 
-- 真实 vLLM 运行时端到端集成
-- 真正的 Triton kernel 实现
-- 单卡 BF16 模型推理打通
+- 真实硬件环境下的 `qwen3 dense` 端到端打通
+- 更完整的 vLLM 生成能力覆盖
+- `torch` 宿主边界的进一步收缩
 
 ## 第一阶段支持矩阵
 
@@ -34,7 +36,10 @@
 - 单卡
 - BF16
 - Python-only 启用方式
-- Llama/Qwen-like decoder-only 路径
+- `qwen3 dense` 架构路径
+- plain text prompt
+- non-streaming
+- single prompt
 
 第一阶段明确不支持：
 
@@ -42,10 +47,20 @@
 - 多卡 / 分布式
 - MoE
 - 量化
+- chat / messages 输入协议
+- streaming
+- batching
+- 多模态与工具调用
 
 ## 用户使用方式
 
-当前仓库的用户侧目标路径如下：
+最小本地调用示例如下：
+
+```bash
+python examples/basic.py --model your-model
+```
+
+等价的 Python 入口仍然是：
 
 ```python
 import vllm_xpu
@@ -54,11 +69,20 @@ from vllm import LLM
 llm = LLM(model="your-model", dtype="bfloat16")
 ```
 
-这条路径的前提是：
+当前主示例脚本支持：
+
+- `--model`
+- `--prompt`
+- `--max-tokens`
+- `--temperature`
+- `--top-p`
+- `--top-k`
+
+这条路径当前的前提是：
 
 - 你已经安装了 `vllm`
-- 某个设备后端已经通过 `runtime adapter` 注册了可用 runtime
-- 需要的算子组要么由设备 override 提供，要么能回退到默认 Triton provider
+- `Infinicore` 对目标设备可用
+- 需要的算子组要么由设备 override 提供，要么能回退到默认 `Infinicore` provider
 
 ## 扩展作者入口
 

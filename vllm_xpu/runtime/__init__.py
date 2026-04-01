@@ -1,6 +1,7 @@
 """Runtime adapter interfaces and registry helpers."""
 
 from vllm_xpu.runtime.base import BaseRuntimeAdapter, RuntimeAdapter
+from vllm_xpu.runtime.infinicore import InfinicoreRuntimeAdapter
 from vllm_xpu.runtime.registry import (
     NoRuntimeAvailable,
     RuntimeAdapterAlreadyRegistered,
@@ -20,6 +21,7 @@ from vllm_xpu.runtime.registry import (
 
 __all__ = [
     "BaseRuntimeAdapter",
+    "InfinicoreRuntimeAdapter",
     "RuntimeAdapter",
     "NoRuntimeAvailable",
     "RuntimeAdapterAlreadyRegistered",
@@ -36,4 +38,3 @@ __all__ = [
     "register_runtime_adapter",
     "resolve_runtime_adapter",
 ]
-

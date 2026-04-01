@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from contextlib import nullcontext
+from types import SimpleNamespace
 
 from vllm_xpu.platforms.xpu import XPUPlatform
 from vllm_xpu.plugins import register_xpu_platform
@@ -78,6 +79,7 @@ def test_xpu_platform_delegates_device_methods_to_runtime_adapter() -> None:
     assert XPUPlatform.get_device_uuid() == "mock:0"
     assert XPUPlatform.get_device_total_memory() == 20
     assert XPUPlatform.get_device_capability() == {"major": 1, "minor": 0}
-    assert XPUPlatform.get_attn_backend_cls(None, 128, None, None, 16, True, False) == (
+    selector_config = SimpleNamespace(head_size=128, dtype=None)
+    assert XPUPlatform.get_attn_backend_cls(None, selector_config) == (
         "vllm_xpu.attention.backends.flash_attn.XPUAttentionBackend"
     )

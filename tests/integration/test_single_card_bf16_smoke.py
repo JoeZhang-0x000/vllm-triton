@@ -47,10 +47,15 @@ def test_python_only_bootstrap_smoke_path() -> None:
     from vllm import LLM, SamplingParams  # type: ignore
 
     llm = LLM(model="mock-model", dtype="bfloat16")
-    sampling_params = SamplingParams(max_tokens=8, temperature=0.0)
+    sampling_params = SamplingParams(max_tokens=8, temperature=0.0, top_p=1.0, top_k=-1)
     output = llm.generate(["hello"], sampling_params)
 
     assert bootstrap.is_initialized() is True
     assert output["platform"] == "vllm_xpu.platforms.xpu.XPUPlatform"
-    assert output["sampling"] == {"max_tokens": 8, "temperature": 0.0}
-
+    assert output["prompts"] == ["hello"]
+    assert output["sampling"] == {
+        "max_tokens": 8,
+        "temperature": 0.0,
+        "top_p": 1.0,
+        "top_k": -1,
+    }

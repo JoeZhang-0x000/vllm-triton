@@ -72,20 +72,20 @@ def clear_operator_providers() -> None:
 def register_default_operator_providers() -> None:
     """Register built-in operator providers.
 
-    Register the package-default Triton provider exactly once.
+    Register the package-default Infinicore provider exactly once.
     """
-    from vllm_xpu.ops.providers.triton_provider import (
-        TRITON_PROVIDER_NAME,
-        build_triton_provider,
+    from vllm_xpu.ops.providers.infinicore_provider import (
+        INFINICORE_PROVIDER_NAME,
+        build_infinicore_provider,
     )
 
     with _LOCK:
-        if TRITON_PROVIDER_NAME in _OPERATOR_PROVIDERS:
+        if INFINICORE_PROVIDER_NAME in _OPERATOR_PROVIDERS:
             return
 
     register_operator_provider(
-        TRITON_PROVIDER_NAME,
-        build_triton_provider(),
+        INFINICORE_PROVIDER_NAME,
+        build_infinicore_provider(),
         set_default=True,
     )
 

@@ -1,12 +1,14 @@
 ---
 title: feat: 构建 vLLM XPU 基础框架
 type: feat
-status: active
+status: superseded
 date: 2026-04-01
 origin: docs/brainstorms/vllm-xpu-requirements.md
 ---
 
 # feat: 构建 vLLM XPU 基础框架
+
+> Superseded by [2026-04-01-002-feat-infinicore-qwen3-dense-plan.md](/Users/bytedance/Desktop/nt_workspace/vllm-triton/docs/plans/2026-04-01-002-feat-infinicore-qwen3-dense-plan.md). This document remains as the original Triton-default foundation plan and should no longer be used as the execution source of truth.
 
 ## 概述
 

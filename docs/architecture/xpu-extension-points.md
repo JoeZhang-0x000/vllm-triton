@@ -4,7 +4,13 @@
 
 ## 目标
 
-`vllm_xpu` 不试图在第一阶段就定义一套很重的后端抽象。当前扩展设计只解决两个问题：
+`vllm_xpu` 当前不把自己定义成“任意默认执行基座都平等存在”的大框架。第一阶段先固定一条真实可跑路径：
+
+- 对外仍然只有统一的 `xpu` 产品入口
+- 对内默认执行基座固定为 `Infinicore`
+- 后续设备后端仍可以通过 runtime adapter 与 operator provider 做定制覆盖
+
+因此，当前扩展设计只解决两个问题：
 
 - 如何让一个设备声明“我是一种可用 runtime”
 - 如何让一个设备只替换自己真正需要替换的算子组
@@ -31,7 +37,7 @@ runtime adapter:
   active runtime -> 第一个 available runtime -> 报错
 
 operator provider:
-  runtime override -> 默认 Triton provider -> 报错
+  runtime override -> 默认 Infinicore provider -> 报错
 ```
 
 ## Runtime Adapter 合同
@@ -107,14 +113,15 @@ register_runtime_adapter("myxpu", MyRuntimeAdapter())
 
 ## Operator Provider 合同
 
-当前稳定算子组有四个：
+当前稳定算子组有五个：
 
 - `attention`
+- `embedding`
 - `linear`
 - `norm_act`
 - `rotary`
 
-默认 Triton provider 会一次性提供这四组能力。后续设备后端不需要完整接管，可以只 override 自己关心的算子组。
+默认 `Infinicore` provider 会一次性提供这五组能力。后续设备后端不需要完整接管，可以只 override 自己关心的算子组。
 
 示例：只替换 `attention`
 
@@ -143,7 +150,7 @@ register_runtime_provider_override("myxpu", "myxpu-attention")
 在这个例子里：
 
 - `attention` 走设备自定义实现
-- `linear`、`norm_act`、`rotary` 继续走默认 Triton provider
+- `embedding`、`linear`、`norm_act`、`rotary` 继续走默认 `Infinicore` provider
 
 ## 何时应该新增算子组
 
@@ -164,7 +171,10 @@ register_runtime_provider_override("myxpu", "myxpu-attention")
 - vLLM V1
 - 单卡
 - BF16
-- Llama/Qwen-like decoder-only 路径
+- `qwen3 dense` 架构路径
+- plain text prompt
+- non-streaming
+- single prompt
 
 以下内容当前不属于稳定扩展面：
 
@@ -172,7 +182,8 @@ register_runtime_provider_override("myxpu", "myxpu-attention")
 - 多卡 / 分布式
 - MoE
 - 量化
+- chat / messages 输入协议
+- batching
 - 设备专有 memory pool / graph capture / custom C++ kernels
 
 如果后续工作要引入这些内容，应单独扩展 plan，而不是直接在当前抽象上堆。
-

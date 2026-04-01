@@ -21,9 +21,11 @@ def initialize() -> bool:
 
         from vllm_xpu.ops.registry import register_default_operator_providers
         from vllm_xpu.runtime.defaults import register_default_runtime_adapters
+        from vllm_xpu.vllm_registration import register_with_vllm
 
         register_default_runtime_adapters()
         register_default_operator_providers()
+        register_with_vllm()
         _BOOTSTRAPPED = True
         return True
 
@@ -38,4 +40,3 @@ def _reset_for_tests() -> None:
     global _BOOTSTRAPPED
     with _BOOTSTRAP_LOCK:
         _BOOTSTRAPPED = False
-
