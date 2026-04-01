@@ -1,0 +1,25 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "vllm-xpu"
+version = "0.1.0"
+description = "Out-of-tree vLLM XPU foundation plugin"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "Apache-2.0" }
+authors = [{ name = "vllm-xpu contributors" }]
+dependencies = []
+
+[project.entry-points."vllm.platform_plugins"]
+xpu = "vllm_xpu.plugins:register_xpu_platform"
+
+[project.entry-points."vllm.general_plugins"]
+xpu_bootstrap = "vllm_xpu.plugins:register_xpu_general_plugin"
+
+[tool.setuptools.packages.find]
+include = ["vllm_xpu*"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
