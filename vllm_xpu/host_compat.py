@@ -55,12 +55,22 @@ def _ensure_graph_capture_output(applied: list[str]) -> None:
         convert_frame = _ensure_module("torch._dynamo.convert_frame")
         applied.append("torch._dynamo.convert_frame")
 
-    if _ensure_attr(
-        convert_frame,
-        "GraphCaptureOutput",
-        type("GraphCaptureOutput", (), {}),
-    ):
+    graph_capture_output = getattr(convert_frame, "GraphCaptureOutput", None)
+    if graph_capture_output is None:
+        graph_capture_output = type(
+            "GraphCaptureOutput",
+            (),
+            {
+                # vLLM may monkey patch this method at import time. Returning an
+                # empty runtime environment is sufficient for host bootstrap.
+                "get_runtime_env": lambda self: {},
+            },
+        )
+        convert_frame.GraphCaptureOutput = graph_capture_output
         applied.append("torch._dynamo.convert_frame.GraphCaptureOutput")
+
+    if _ensure_attr(graph_capture_output, "get_runtime_env", lambda self: {}):
+        applied.append("torch._dynamo.convert_frame.GraphCaptureOutput.get_runtime_env")
 
 
 def patch_for_vllm_import() -> tuple[str, ...]:

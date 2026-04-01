@@ -25,6 +25,7 @@ def test_patch_for_vllm_import_installs_missing_torch_shims(monkeypatch) -> None
     assert hasattr(fake_torch._inductor, "config")
     assert fake_torch._inductor.config.compile_threads == 1
     assert hasattr(convert_frame, "GraphCaptureOutput")
+    assert hasattr(convert_frame.GraphCaptureOutput, "get_runtime_env")
 
 
 def test_patch_for_vllm_import_is_safe_without_torch(monkeypatch) -> None:
