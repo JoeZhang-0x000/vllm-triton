@@ -41,8 +41,19 @@ class XPUPlatform(Platform):
     additional_env_vars: list[str] = []
 
     @classmethod
+    def sync_runtime_metadata(cls) -> None:
+        """Project active runtime adapter metadata onto the platform class."""
+        _, runtime = resolve_runtime_adapter()
+        cls.device_type = runtime.device_type()
+        cls.device_name = runtime.device_type()
+        cls.dispatch_key = runtime.dispatch_key()
+
+    @classmethod
     def pre_register_and_update(cls, parser: Any = None) -> None:
-        return None
+        try:
+            cls.sync_runtime_metadata()
+        except Exception:
+            return None
 
     @classmethod
     def check_and_update_config(cls, vllm_config: Any) -> None:
@@ -85,6 +96,10 @@ class XPUPlatform(Platform):
     def get_device_name(cls, device_id: int = 0) -> str:
         _, runtime = resolve_runtime_adapter()
         return runtime.get_device_name(device_id)
+
+    @classmethod
+    def get_device_uuid(cls, device_id: int = 0) -> str:
+        return cls.get_device_name(device_id)
 
     @classmethod
     def get_device_total_memory(cls, device_id: int = 0) -> int:

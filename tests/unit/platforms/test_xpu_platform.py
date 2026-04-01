@@ -67,14 +67,17 @@ def test_xpu_platform_delegates_device_methods_to_runtime_adapter() -> None:
     register_runtime_adapter("mock", adapter)
     activate_runtime_adapter("mock")
 
+    XPUPlatform.sync_runtime_metadata()
     XPUPlatform.set_device("mock:0")
 
     assert adapter.set_device_calls == ["mock:0"]
+    assert XPUPlatform.device_type == "mock"
+    assert XPUPlatform.dispatch_key == "MOCK"
     assert XPUPlatform.mem_get_info() == (10, 20)
     assert XPUPlatform.get_device_name() == "mock:0"
+    assert XPUPlatform.get_device_uuid() == "mock:0"
     assert XPUPlatform.get_device_total_memory() == 20
     assert XPUPlatform.get_device_capability() == {"major": 1, "minor": 0}
     assert XPUPlatform.get_attn_backend_cls(None, 128, None, None, 16, True, False) == (
         "vllm_xpu.attention.backends.flash_attn.XPUAttentionBackend"
     )
-

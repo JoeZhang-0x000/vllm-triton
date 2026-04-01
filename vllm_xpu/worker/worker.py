@@ -20,11 +20,25 @@ def _maybe_get(obj: Any, attr: str, default: Any = None) -> Any:
     return getattr(obj, attr, default) if obj is not None else default
 
 
+def _is_bfloat16_dtype(dtype: Any) -> bool:
+    if dtype is None:
+        return True
+    if dtype in ("bfloat16", "bf16"):
+        return True
+    return str(dtype) in ("torch.bfloat16", "bfloat16")
+
+
 def validate_xpu_config(vllm_config: Any) -> None:
     """Validate and minimally normalize a config for the XPU foundation."""
     model_config = _maybe_get(vllm_config, "model_config")
     parallel_config = _maybe_get(vllm_config, "parallel_config")
     cache_config = _maybe_get(vllm_config, "cache_config")
+    dtype = _maybe_get(model_config, "dtype")
+
+    if not _is_bfloat16_dtype(dtype):
+        raise UnsupportedXPUConfiguration(
+            "vllm_xpu foundation only supports bfloat16 dtype"
+        )
 
     if _maybe_get(model_config, "quantization") not in (None, "", False):
         raise UnsupportedXPUConfiguration(
@@ -47,6 +61,13 @@ def validate_xpu_config(vllm_config: Any) -> None:
     if _maybe_get(parallel_config, "data_parallel_size", 1) > 1:
         raise UnsupportedXPUConfiguration(
             "vllm_xpu foundation only supports data_parallel_size == 1"
+        )
+    distributed_executor_backend = _maybe_get(
+        parallel_config, "distributed_executor_backend"
+    )
+    if distributed_executor_backend not in (None, "", "uni"):
+        raise UnsupportedXPUConfiguration(
+            "vllm_xpu foundation does not support distributed_executor_backend"
         )
 
     if parallel_config is not None and _maybe_get(parallel_config, "worker_cls", "auto") == "auto":
@@ -90,4 +111,3 @@ class XPUWorker:
     def get_memory_snapshot(self):
         """Return a minimal runtime memory snapshot."""
         return capture_runtime_memory_snapshot()
-

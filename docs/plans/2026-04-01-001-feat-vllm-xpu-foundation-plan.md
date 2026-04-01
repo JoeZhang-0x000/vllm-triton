@@ -250,7 +250,7 @@ for each operator group request:
 **完成判定：**
 - 不依赖 vLLM 内部实现，也能独立解析当前 active runtime adapter 和最终生效的 operator provider 集合。
 
-- [ ] **Unit 3: XPU platform 与 V1 worker/model-runner 集成**
+- [x] **Unit 3: XPU platform 与 V1 worker/model-runner 集成**
 
 **目标：** 引入具体的 out-of-tree 平台实现，把 vLLM 的平台合同适配到 runtime adapter 合同，并把执行路径路由到最小 XPU V1 worker 路径。
 
