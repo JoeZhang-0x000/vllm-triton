@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from contextlib import nullcontext
 from dataclasses import dataclass
 from typing import Any
@@ -17,15 +18,36 @@ class InfinicoreRuntimeAdapter(BaseRuntimeAdapter):
     name: str = "infinicore"
     device_type_name: str = "xpu"
     dispatch_key_name: str = "XPU"
+    preferred_device_types: tuple[str, ...] = ("mlu", "npu", "musa", "cuda", "cpu")
 
     def _module(self):
         return get_infinicore()
+
+    def _runtime_device_type(self) -> str:
+        override = os.environ.get("VLLM_XPU_DEVICE_TYPE")
+        if override:
+            return override
+
+        module = self._module()
+        if module is None:
+            return self.device_type_name
+
+        get_device_count = getattr(module, "get_device_count", None)
+        if callable(get_device_count):
+            for candidate in self.preferred_device_types:
+                try:
+                    if int(get_device_count(candidate)) > 0:
+                        return candidate
+                except Exception:
+                    continue
+
+        return self.device_type_name
 
     def is_available(self) -> bool:
         return self._module() is not None
 
     def device_type(self) -> str:
-        return self.device_type_name
+        return self._runtime_device_type()
 
     def dispatch_key(self) -> str:
         return self.dispatch_key_name
