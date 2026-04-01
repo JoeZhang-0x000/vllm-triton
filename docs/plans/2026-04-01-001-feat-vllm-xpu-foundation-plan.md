@@ -291,7 +291,7 @@ for each operator group request:
 **完成判定：**
 - 平台初始化、config 校验和 worker 选择均由 `vllm_xpu` 自身掌控，不依赖广域全局 patch。
 
-- [ ] **Unit 4: 默认 Triton provider 与窄算子集成**
+- [x] **Unit 4: 默认 Triton provider 与窄算子集成**
 
 **目标：** 加入默认计算实现，并把第一阶段所需算子组路由到 provider-backed 执行路径。
 

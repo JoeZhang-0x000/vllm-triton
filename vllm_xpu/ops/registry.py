@@ -72,11 +72,22 @@ def clear_operator_providers() -> None:
 def register_default_operator_providers() -> None:
     """Register built-in operator providers.
 
-    The foundation phase intentionally defers the default Triton provider
-    to a later implementation unit, so bootstrap currently performs no
-    provider registration.
+    Register the package-default Triton provider exactly once.
     """
-    return None
+    from vllm_xpu.ops.providers.triton_provider import (
+        TRITON_PROVIDER_NAME,
+        build_triton_provider,
+    )
+
+    with _LOCK:
+        if TRITON_PROVIDER_NAME in _OPERATOR_PROVIDERS:
+            return
+
+    register_operator_provider(
+        TRITON_PROVIDER_NAME,
+        build_triton_provider(),
+        set_default=True,
+    )
 
 
 def list_operator_providers() -> tuple[str, ...]:
@@ -176,4 +187,3 @@ def resolve_operator(
         f"operator group {normalized.value!r} is not supported for runtime "
         f"{runtime_label!r}"
     )
-
