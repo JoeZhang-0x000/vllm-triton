@@ -357,7 +357,7 @@ layer path:
 **完成判定：**
 - 默认 provider 能独立覆盖最小算子面，而不需要复制一整套设备专有模型执行路径。
 
-- [ ] **Unit 5: Python-only smoke path、兼容性测试与作者文档**
+- [x] **Unit 5: Python-only smoke path、兼容性测试与作者文档**
 
 **目标：** 固化承诺给用户的使用方式，并文档化后续设备如何扩展这个框架。
 
