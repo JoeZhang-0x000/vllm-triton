@@ -23,7 +23,7 @@ related:
 1. **宿主兼容层**：让 `vllm` 在非标准 `torch` 环境中至少能完成安装、import、插件发现和最小 LLM 入口初始化。
 2. **执行层**：在宿主存活的前提下，继续把真实算子执行收敛到 `vllm_xpu + Infinicore`。
 
-这份计划的目标是定义一条“合理、分阶段、可 bring-up”的路径，使 `torch` 在 `vllm` 中只保留宿主壳的作用，而非继续主导执行后端。首选方案不是先改 `../vllm`，而是在 `import vllm` 之前，通过 `vllm_xpu` 提供的 host compatibility monkey patch 先把宿主带起来。
+这份计划的目标是定义一条“合理、分阶段、可 bring-up”的路径，使 `torch` 在 `vllm` 中只保留宿主壳的作用，而非继续主导执行后端。现阶段主方案不是先改 `../vllm`，而是让 `vllm_xpu` 提供的 host compatibility patch 以**进程级自动注入**方式覆盖主进程和 `vllm` 自拉起的子进程。
 
 ## 问题背景
 
@@ -55,6 +55,7 @@ related:
 - `vllm.__init__` 会无条件 import `vllm.env_override`，即使走 `empty` 安装路径也无法绕过 import-time 兼容逻辑（见 `../vllm/vllm/__init__.py`）。
 - 目标机器的真实报错表明：宿主 `torch` 与 `vllm` 之间已经存在 `torch._dynamo` 私有 API 不兼容，当前 `vllm` 还不够“宿主兼容边界最小化”。
 - `vllm` 的 plugin 加载时机在 `import vllm` 之后，因此不能依赖 `vllm.general_plugins` / `vllm.platform_plugins` 去修复 import-time 失败。
+- `vllm.model_executor.models.registry` 会通过子进程执行 `python -m vllm.model_executor.models.registry` 做模型结构检查；该子进程不会先 `import vllm_xpu`，因此无法继承仅存在于用户入口脚本中的 monkey patch。
 
 ### 结构判断
 
@@ -86,8 +87,8 @@ related:
 - **决策 3：优先用 pre-import monkey patch 吸收 import-time torch 私有 API 不兼容，而不是先改 `../vllm`。**
   - 理由：`vllm` plugin 机制时机太晚，只有在 `import vllm` 之前 patch 宿主 `torch`/环境，才有机会绕过 `env_override` 导入失败。
 
-- **决策 4：为 monkey patch 设计两个载体，先显式 bootstrap，再按需要升级到 `sitecustomize`。**
-  - 理由：`examples/basic.py` 这类入口可以先显式调用 `patch_for_vllm_import()`；如果后续发现 worker 子进程也需要同样 patch，再收敛到更早的自动注入载体。
+- **决策 4：以 `sitecustomize` 或等效的进程级自动注入作为主载体，显式 bootstrap 仅作为兼容补充。**
+  - 理由：`basic.py` 级别的显式调用只能覆盖主进程，无法覆盖 `vllm` 在模型检查阶段拉起的 registry 子进程。要让 `python -m vllm.model_executor.models.registry` 同样生效，patch 必须在 Python 解释器启动时自动进入。
 
 - **决策 5：首版不尝试替换 `vllm` 的 `torch.nn.Module` / `Parameter` / 权重加载体系。**
   - 理由：这会把范围迅速膨胀为“另一个宿主框架”。第一阶段只处理 import、platform、backend、最小 tensor bridge。
@@ -115,7 +116,7 @@ related:
 
 ```text
 python env
-  -> import vllm_xpu.host_compat
+  -> sitecustomize imports vllm_xpu.host_compat
   -> patch_for_vllm_import()
   -> import vllm
   -> empty-target host install succeeds
@@ -133,7 +134,7 @@ python env
 ```text
 host side (still torch-based):
   import / config / plugin discovery
-  pre-import monkey patch
+  process-wide pre-import patch
   model object graph
   parameter loading
   sampling policy
@@ -148,7 +149,7 @@ execution side (Infinicore-first):
 
 ## 实施单元
 
-- [ ] **Unit 1: 规范宿主基线并引入 pre-import monkey patch 路线**
+- [ ] **Unit 1: 规范宿主基线并引入进程级 host compat 路线**
 
 **目标：** 把“支持哪份 `vllm` 源码、哪种安装方式、哪种宿主 `torch` 约束”明确下来，避免本地规划和目标机器环境继续漂移。
 
@@ -158,6 +159,7 @@ execution side (Infinicore-first):
 - 修改：`README.md`
 - 修改：`docs/architecture/xpu-extension-points.md`
 - 新建：`docs/bringup/mlu-host-setup.md`
+- 新建：`sitecustomize.py`
 - 新建：`vllm_xpu/host_compat.py`
 - 新建：`tests/unit/test_host_compat.py`
 - 新建测试：`tests/integration/test_empty_target_host_assumptions.py`
@@ -168,28 +170,31 @@ execution side (Infinicore-first):
   - 预设环境变量
   - 为缺失的 `torch` 私有符号补 stub
   - 对 `_inductor` 配置访问做 feature detection
-- 文档中明确要求所有 bring-up 入口在 `import vllm` 之前先执行这层 patch。
-- 为 `basic.py` bring-up 补一份宿主检查清单：host patch 已执行、`vllm` 可导入、插件 entrypoint 可发现。
+- 新增仓库根目录 `sitecustomize.py`，在 Python 解释器启动时自动执行 `patch_for_vllm_import()`。
+- 文档中明确要求 bring-up 环境保证仓库根目录位于 `PYTHONPATH`，使主进程和 `vllm` 子进程都能命中该自动注入。
+- 为 `basic.py` bring-up 补一份宿主检查清单：`sitecustomize` 已加载、host patch 已执行、`vllm` 可导入、插件 entrypoint 可发现。
 
 **测试场景：**
 - 仓库内 smoke 明确表达 `empty` 路线是受支持 bring-up 路径。
 - 文档中给出最小安装/验证步骤，不再误导用户优先走 `cpu` 后端安装。
 
 **完成判定：**
-- 团队对“MLU bring-up 依赖什么宿主基线、patch 时机在哪里”有唯一答案，不再靠口头约定。
+- 团队对“MLU bring-up 依赖什么宿主基线、patch 时机在哪里、如何覆盖子进程”有唯一答案，不再靠口头约定。
 
-- [ ] **Unit 2: 用宿主 monkey patch 吸收 import-time 的 torch 私有 API 不兼容**
+- [ ] **Unit 2: 用进程级 host compat 吸收主进程与子进程的 import-time torch 私有 API 不兼容**
 
 **目标：** 让 `vllm` 在 `empty` 模式 + 非标准 torch 发行版下，至少可以完成 import 和 `LLM` 入口初始化前的模块加载。
 
 **对应需求：** R3, R6, R7
 
 **文件：**
+- 修改：`sitecustomize.py`
 - 修改：`vllm_xpu/host_compat.py`
 - 修改：`examples/basic.py`
 - 新建：`examples/debug_host_bootstrap.py`
 - 新建测试：`tests/unit/test_host_compat.py`
 - 新建测试：`tests/integration/test_empty_target_import.py`
+- 新建测试：`tests/integration/test_sitecustomize_subprocess_import.py`
 
 **方案：**
 - 审计真实失败所需的最小兼容点，例如 `torch._dynamo.convert_frame.GraphCaptureOutput`。
@@ -197,15 +202,17 @@ execution side (Infinicore-first):
   - 能找到原始对象则不处理
   - 缺失时补最小 stub
   - 不支持的 `_inductor` 配置项只做 guarded write
-- 保证 `from vllm import LLM` 不会因为图编译相关内部 API 不兼容而整体 import 失败。
-- 新增 `debug_host_bootstrap.py`，专门验证“host patch 后可导入 vllm”。
+- 让 `sitecustomize.py` 成为默认加载路径，确保 `python -m vllm.model_executor.models.registry` 这类子进程也自动获得同样的 patch。
+- 保证 `from vllm import LLM` 和 `python -m vllm.model_executor.models.registry` 都不会因为图编译相关内部 API 不兼容而整体 import 失败。
+- 新增 `debug_host_bootstrap.py`，专门验证“host patch 后可导入 vllm”；必要时再加一个子进程 smoke，专门验证 registry 子进程路径。
 
 **测试场景：**
 - 模拟宿主 `torch` 缺失某些 `torch._dynamo` 私有成员时，执行 host patch 后 `import vllm` 仍然成功。
+- 模拟子进程执行 `python -m vllm.model_executor.models.registry` 时，同样能命中 host patch。
 - `VLLM_TARGET_DEVICE=empty` 场景下，上述 patch 不应成为阻塞。
 
 **完成判定：**
-- `import vllm` 在目标机器上不再因 `torch` 私有 API 不兼容而失败，且无需修改 `../vllm`。
+- `import vllm` 和 `vllm` 自身拉起的 registry 子进程在目标机器上都不再因 `torch` 私有 API 不兼容而失败，且无需修改 `../vllm`。
 
 - [ ] **Unit 3: 把 `vllm_xpu` 平台选择与 OOT 注册收敛为 empty-host 友好模式**
 
@@ -247,6 +254,7 @@ execution side (Infinicore-first):
 **文件：**
 - 修改：`examples/basic.py`
 - 修改：`examples/offline_inference.py`
+- 修改：`sitecustomize.py`
 - 修改：`vllm_xpu/host_compat.py`
 - 修改：`vllm_xpu/worker/worker.py`
 - 修改：`vllm_xpu/worker/model_runner.py`
@@ -257,9 +265,9 @@ execution side (Infinicore-first):
 - 新建测试：`tests/integration/test_empty_target_debug_examples.py`
 
 **方案：**
-- `basic.py` 保持用户入口不变，但在失败时输出更具体的阶段信息：host patch、宿主 import、plugin 发现、platform 选择、backend 选择、模型初始化、第一次 generate。
+- `basic.py` 保持用户入口不变，但在失败时输出更具体的阶段信息：`sitecustomize` 是否加载、host patch、宿主 import、plugin 发现、platform 选择、backend 选择、模型初始化、第一次 generate。
 - 新增两个调试脚本：
-  - `debug_host_bootstrap.py`：只验证 host patch + `vllm` import + plugin load
+  - `debug_host_bootstrap.py`：验证 `sitecustomize` + host patch + `vllm` import + plugin load
   - `debug_platform_selection.py`：验证当前平台是否落到 `XPUPlatform`
 - 对 `conversion.py` / `logits_bridge.py` 只做最薄的可诊断增强，不在本阶段引入新的抽象。
 
@@ -299,8 +307,8 @@ execution side (Infinicore-first):
 
 ## 风险与应对
 
-- **风险：monkey patch 只能覆盖主进程，worker 子进程仍在 import `vllm` 时失败。**
-  - 应对：先显式 patch 主入口；若 bring-up 表明子进程同样需要，则升级到 `sitecustomize` 或统一 launcher 注入。
+- **风险：`sitecustomize` 未被加载，导致主进程或子进程仍然回到未 patch 状态。**
+  - 应对：在 bring-up 文档中明确 `PYTHONPATH` 前提；新增调试脚本输出 `sitecustomize` 命中状态，并用子进程 smoke 测试覆盖。
 
 - **风险：设备定制 `torch` 缺失更多私有 API，不止 `GraphCaptureOutput`。**
   - 应对：将 host compat 设计成集中 shim 层，按“可选 patch”模式系统化处理，而不是按单点补丁修一个报一个。
@@ -315,7 +323,8 @@ execution side (Infinicore-first):
 
 ### Characterization / Host
 
-- `patch_for_vllm_import()` 之后，`import vllm` 在 `empty` 模式宿主环境中成功
+- `sitecustomize` 自动触发 `patch_for_vllm_import()` 后，`import vllm` 在 `empty` 模式宿主环境中成功
+- `python -m vllm.model_executor.models.registry` 也能在同一环境中成功进入模块主入口
 - `import vllm_xpu` 后，plugin 注册不报错
 - 平台选择明确命中 `XPUPlatform`
 
@@ -337,7 +346,7 @@ execution side (Infinicore-first):
 ## 依赖与顺序
 
 1. Unit 1 先明确宿主基线，否则后续计划对象会继续漂移。
-2. Unit 2 先用 host compat 消除 `vllm` import-time torch 硬依赖，这是 bring-up 的第一阻塞。
+2. Unit 2 先用进程级 host compat 消除 `vllm` import-time torch 硬依赖，这是 bring-up 的第一阻塞。
 3. Unit 3 在宿主可导入后，确保插件和平台选择稳定。
 4. Unit 4 建立分层调试闭环，避免把执行层问题和宿主问题混在一起。
 5. Unit 5 才用真实 MLU 机器驱动执行层最终收敛。
@@ -345,6 +354,6 @@ execution side (Infinicore-first):
 ## 交付物
 
 - 一条受支持的 `empty-target` 宿主安装与 bring-up 路线
-- 一组位于 `vllm_xpu` 内、发生在 `import vllm` 之前的最小 host compat 补丁点
+- 一组位于 `vllm_xpu` 内、由 `sitecustomize` 驱动并覆盖主进程/子进程的最小 host compat 补丁点
 - 一组能定位 host/platform/execution 三层问题的调试入口
 - 一次真实 MLU 上的 `qwen3 dense` 生成验收

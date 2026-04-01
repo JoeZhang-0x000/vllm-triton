@@ -3,7 +3,11 @@ from __future__ import annotations
 import sys
 import types
 
-from vllm_xpu.host_compat import patch_for_vllm_import
+from vllm_xpu_host_compat import patch_for_vllm_import
+
+
+def setup_function() -> None:
+    sys.modules.pop("sitecustomize", None)
 
 
 def test_patch_for_vllm_import_installs_missing_torch_shims(monkeypatch) -> None:
@@ -29,6 +33,7 @@ def test_patch_for_vllm_import_installs_missing_torch_shims(monkeypatch) -> None
 
 
 def test_patch_for_vllm_import_is_safe_without_torch(monkeypatch) -> None:
+    monkeypatch.delitem(sys.modules, "cpuinfo", raising=False)
     monkeypatch.delitem(sys.modules, "torch", raising=False)
     monkeypatch.delitem(sys.modules, "torch._dynamo", raising=False)
     monkeypatch.delitem(sys.modules, "torch._dynamo.convert_frame", raising=False)
@@ -36,4 +41,13 @@ def test_patch_for_vllm_import_is_safe_without_torch(monkeypatch) -> None:
 
     applied = patch_for_vllm_import()
 
-    assert applied == ()
+    assert "cpuinfo.get_cpu_info" in applied
+    assert sys.modules["cpuinfo"].get_cpu_info()["count"] is not None
+
+
+def test_sitecustomize_imports_without_loading_vllm_xpu_package(monkeypatch) -> None:
+    monkeypatch.delitem(sys.modules, "vllm_xpu", raising=False)
+
+    import sitecustomize  # noqa: F401
+
+    assert "vllm_xpu" not in sys.modules
