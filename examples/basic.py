@@ -21,7 +21,9 @@ def build_parser() -> argparse.ArgumentParser:
 def main() -> None:
     args = build_parser().parse_args()
 
-    import vllm_xpu  # noqa: F401
+    import vllm_xpu
+
+    vllm_xpu.patch_for_vllm_import()
     from vllm import LLM, SamplingParams
 
     sampling_params = SamplingParams(
