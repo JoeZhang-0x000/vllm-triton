@@ -143,8 +143,8 @@ class XPUWorker:
         else:
             self.runtime_device = f"{self.runtime.device_type()}:{self.local_rank}"
         self.runtime.set_device(self.runtime_device)
-        self.device = self._make_host_device()
         self.host_runner_kind = self._resolve_host_runner_kind()
+        self.device = self._make_host_device()
         self._init_host_runtime()
         self.model_runner.attach_backend_runner(self._build_backend_runner())
         return self.device
@@ -236,7 +236,10 @@ class XPUWorker:
         try:
             import torch
 
-            if hasattr(torch, "xpu") and self.runtime.device_type() != "cpu":
+            # Only use the upstream torch.xpu runner when the active runtime
+            # itself is truly xpu-native. Infinicore-backed MLU/NPU paths still
+            # rely on a CPU host runner plus OOT operator hooks.
+            if hasattr(torch, "xpu") and self.runtime.device_type() == "xpu":
                 return "xpu"
         except Exception:
             pass
@@ -246,7 +249,7 @@ class XPUWorker:
         try:
             import torch
 
-            if self._resolve_host_runner_kind() == "xpu":
+            if self.host_runner_kind == "xpu":
                 return torch.device(f"xpu:{self.local_rank}")
             return torch.device("cpu")
         except Exception:
